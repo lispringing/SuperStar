@@ -1,28 +1,28 @@
-name: 刷课
+名称: 刷课
  
-on: 
-  push:
-    branches: [ main ]
-  #是否开始每天8点定时刷课，若要开启请把下面两行注释去掉
-  #schedule:
-  #  - cron: "0 8 * * *" 
+在：
+  推：
+: [主要]
+  #是否开始每天8点定时刷课，若要开启请把下面两行备注去掉
+  ＃ 浙江：
+  # - cron:“0 8 * * *”
     
-jobs: 
-  Start:
-    runs-on: ubuntu-latest # 在最新版本的 Ubuntu 操作系统环境下运行
-    steps: # 要执行的步骤
-      - name: 拷贝代码
-        uses: actions/checkout@v3  # 用于将github代码仓库的代码拷贝到工作目录中
+职位：
+  开始：
+    连续运行           : ubuntu-latest # 在最新版本的 Ubuntu 网络环境下运行
+    步骤         : # 要执行的步骤
+      -名称：复制代码
+        用途：actions/checkout@v3         #用于将github代码仓库的代码拷贝到工作目录中
  
-      - name: 设置python环境
-        uses: actions/setup-python@v2 # 用于设置 Python 环境，它允许你指定要在工作环境中使用的 Python 版本
-        with:
-          python-version: '3.9'  # 选择要用的Python版本
+      - name :设置python环境
+        使用     : actions/setup-python@v2 #用于设置Python环境，它允许你指定要在工作环境中使用的Python版本
+        和：
+          python版本：'3.9'    # 选择使用的Python版本
  
-      - name: 安装依赖包
-        run: | # 安装依赖包
-          pip install -r ./requirements.txt 
+      -名称：安装依赖包
+        运行：| # 安装依赖包
+          pip install -r ./requirements.txt
           
       
-      - name: Run main.py
-        run: python main.py -u 学习通账号 -p 学习通密码 -l 244403509 #课程id，默认为心理课的
+      -名称：运行main.py
+        run : python main.py -u 15753397535 -p L15753397535 -l 245347699 #课程id，默认为心理课的
