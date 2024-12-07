@@ -1,4 +1,4 @@
-name: 刷课
+name: xxt
  
 on: 
   push:
@@ -25,4 +25,4 @@ jobs:
           
       
       - name: Run main.py
-        run: python main.py -u 学习通账号 -p 学习通密码 -l 244403509 #课程id，默认为心理课的
+        run: python main.py -u 15753397535 -p L15753397535 -l 245347699 #课程id，默认为心理课的
