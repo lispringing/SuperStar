@@ -145,3 +145,28 @@ chaoxing.log
 ./cookies.txt
 .idea/
 cache.json
+
+# Claude settings
+.claude/*
+
+# IDE files
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Virtual environments
+virtualenv/
+.virtualenv/
+
+# Testing artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+pytest_cache/
+test-results/
