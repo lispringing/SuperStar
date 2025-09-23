@@ -25,4 +25,4 @@ jobs:
           
       
       - name: Run main.py
-        run: python main.py -c config.ini
+        run: python main.py -u 354265771 -p WPX006528wpx -l127060101
