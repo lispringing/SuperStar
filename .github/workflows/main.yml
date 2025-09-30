@@ -1,3 +1,4 @@
+
 name: 刷课
  
 on: 
@@ -23,4 +24,4 @@ jobs:
           
       
       - name: Run main.py
-        run: python main.py -u 17812020915 -p Yahan20070915 -l 129306045 #课程id，默认为心理课的
+        run: python main.py -u 13195107987 -p L200707070010grh -l 129306045 #课程id，默认为心理课的
