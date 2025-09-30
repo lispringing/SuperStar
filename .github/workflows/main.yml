@@ -4,8 +4,6 @@ on:
   push:
     branches: [ main ]
   #是否开始每天8点定时刷课，若要开启请把下面两行注释去掉
-  #schedule:
-  #  - cron: "0 8 * * *" 
     
 jobs: 
   Start:
