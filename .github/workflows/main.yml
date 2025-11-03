@@ -25,4 +25,4 @@ jobs:
           
       
       - name: Run main.py
-        run: python main.py -u 学习通账号 -p 学习通密码 -l 244403509 #课程id，默认为心理课的
+        run: python main.py -u 19307920185 -p zhouchen20071014-l 244403509 #https://mooc2-ans.chaoxing.com/mooc2-ans/mycourse/stu?courseid=254743161&clazzid=127317167&cpi=489800354&enc=e8bd13fce670422186a8bcbb5c28df00&t=1762177110318&pageHeader=21&v=0&hideHead=0
