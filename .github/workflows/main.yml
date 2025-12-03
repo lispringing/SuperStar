@@ -1,28 +1,28 @@
-name: 刷课
+name   名字: 刷课
  
-on: 
-  push:
-    branches: [ main ]
+on   在: 
+  push   推:
+    branches   分支机构: [ main    分支：   分支：   分支：[主][主][主]]
   #是否开始每天8点定时刷课，若要开启请把下面两行注释去掉
-  #schedule:
-  #  - cron: "0 8 * * *" 
+           #时间表:#时间表:#时间表:#schedule:   #时间表:
+  # - cron: “0 8 * * *”# - cron: “0 8 * * *”#  - cron: "0 8 * * *" # - cron: “0 8 * * *”
     
-jobs: 
-  Start:
-    runs-on: ubuntu-latest # 在最新版本的 Ubuntu 操作系统环境下运行
-    steps: # 要执行的步骤
-      - name: 拷贝代码
-        uses: actions/checkout@v3  # 用于将github代码仓库的代码拷贝到工作目录中
+jobs   工作: 
+  Start   开始:
+    runs-on   运行在: ubuntu-latest # 在最新版本的 Ubuntu 操作系统环境下运行
+    steps   步骤: # 要执行的步骤
+      - name   名字: 拷贝代码
+        uses   使用: actions/checkout@v3  # 用于将github代码仓库的代码拷贝到工作目录中
  
-      - name: 设置python环境
-        uses: actions/setup-python@v2 # 用于设置 Python 环境，它允许你指定要在工作环境中使用的 Python 版本
-        with:
-          python-version: '3.9'  # 选择要用的Python版本
+      - name   名字: 设置python环境
+        uses   使用: actions/setup-python@v2 # 用于设置 Python 环境，它允许你指定要在工作环境中使用的 Python 版本
+        with   与:
+          python-version   python版本: '3.12'  # 选择要用的Python版本
  
-      - name: 安装依赖包
-        run: | # 安装依赖包
-          pip install -r ./requirements.txt 
+      - name   名字: 安装依赖包
+        run   运行: | # 安装依赖包
+          pip install -r ./requirements.txt PIP install -r ./requirements.txt
           
       
-      - name: Run main.py
-        run: python main.py -u 学习通账号 -p 学习通密码 -l 244403509 #课程id，默认为心理课的
+      - name   名字: Run main.py   —name：执行命令main.py   —name：执行命令main.py   —name：执行命令main.py
+        run   运行: python main.py -u 18897499516 -p 147935qqqq -l 244403509 #课程id，默认为心理课的
