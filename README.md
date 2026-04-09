@@ -1,7 +1,7 @@
 <br />
 <p align="center">
   <a href="https://www.springing.top" target="blank">
-    <img src="img/avatar.webp" alt="Logo" width="156" height="156">
+    <img src="https://blog.springing.top/img/674c4cea68859.png" alt="Logo" width="156" height="156">
   </a>
   <h2 align="center" style="font-weight: 600">Spring-Superstar</h2>
 
@@ -10,4 +10,12 @@
   </p>
 </p>
 
-# 必读！必读！ 必读！
+本项目宗旨是帮助大学生们解放双手，根据教程操作后就可以完成刷课，简单易懂，仅需手机就可以使用
+
+# 用前必读必读！
+默认fork仓库之后是公开的状态，也就是说你的账号和密码是处于一个明文状态！！很危险！！建议把仓库权限改为私有
+之前本仓库就因为明文账号密码泄露导致一些同学账号被盗拿来恶作剧(不得不说世界上还是坏人多)，故提前在此说明，希望大家周知
+
+# 快速开始
+
+<a href="blog.springing.top/p/20241119/" target="blank">点击我查看操作说明</a>
