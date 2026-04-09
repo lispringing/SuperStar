@@ -1,8 +1,5 @@
 <br />
 <p align="center">
-  <a href="https://www.springing.top" target="blank">
-    <img src="https://www.springing.top/img/avatar.webp" alt="Logo" width="156" height="156">
-  </a>
   <h2 align="center" style="font-weight: 600">Spring-Superstar</h2>
 
   <p align="center">
@@ -19,4 +16,4 @@
 
 # 快速开始
 
-<a href="blog.springing.top/p/20241119/" target="blank">点击我查看操作说明</a>
+<a href="https://blog.springing.top/p/20241119/" target="blank">点击我查看操作说明</a>
