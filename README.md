@@ -1,7 +1,7 @@
 <br />
 <p align="center">
     <a href="https://www.springing.top" target="blank">
-    <img src="./img/main.png" alt="Logo" width="156" height="156">
+    <img src="https://github.com/lispringing/SuperStar/blob/main/img/main.png" alt="Logo" width="156" height="156">
   </a>
   <h2 align="center" style="font-weight: 600">Spring-Superstar</h2>
 
