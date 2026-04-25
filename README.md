@@ -1,4 +1,3 @@
-<br />
 <p align="center">
   <h2 align="center" style="font-weight: 600">Spring-Superstar</h2>
 
