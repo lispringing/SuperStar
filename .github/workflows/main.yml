@@ -17,7 +17,7 @@ jobs:
       - name: 设置python环境
         uses: actions/setup-python@v2 # 用于设置 Python 环境，它允许你指定要在工作环境中使用的 Python 版本
         with:
-          python-version: '3.9'  # 选择要用的Python版本
+          python-version: '3.10'  # 选择要用的Python版本
  
       - name: 安装依赖包
         run: | # 安装依赖包
@@ -25,4 +25,4 @@ jobs:
           
       
       - name: Run main.py
-        run: python main.py -u 账号 -p 密码 -l 256869211 #课程id，默认为心理课的
+        run: python main.py -u 19029172815 -p Zjm01242053 -l 256666752 #课程id，默认为心理课的
