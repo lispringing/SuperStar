@@ -1,28 +1,38 @@
 name: 刷课
- 
-on: 
-  push:
-    branches: [ main ]
-  #是否开始每天8点定时刷课，若要开启请把下面两行注释去掉
-  #schedule:
-  #  - cron: "0 8 * * *" 
-    
-jobs: 
+on:
+  # 手动触发 + 定时自动触发
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
   Start:
-    runs-on: ubuntu-latest # 在最新版本的 Ubuntu 操作系统环境下运行
-    steps: # 要执行的步骤
-      - name: 拷贝代码
-        uses: actions/checkout@v3  # 用于将github代码仓库的代码拷贝到工作目录中
- 
-      - name: 设置python环境
-        uses: actions/setup-python@v2 # 用于设置 Python 环境，它允许你指定要在工作环境中使用的 Python 版本
+    runs-on: ubuntu-latest
+    steps:
+      # 1. 拉取仓库代码
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      # 2. 安装 Python 环境
+      - name: 配置 Python 3.11
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.9'  # 选择要用的Python版本
- 
-      - name: 安装依赖包
-        run: | # 安装依赖包
-          pip install -r ./requirements.txt 
-          
-      
-      - name: Run main.py
-        run: python main.py -u 账号 -p 密码 -l 256869211 #课程id，默认为心理课的
+          python-version: "3.11"
+
+      # 3. 安装 Edge 浏览器（GitHub 云端必须装，否则找不到浏览器）
+      - name: 安装 Edge 浏览器
+        run: |
+          sudo apt update
+          sudo apt install -y wget
+          wget https://packages.microsoft.com/repos/edge/pool/main/m/microsoft-edge-stable/microsoft-edge-stable_130.0.2849.56-1_amd64.deb
+          sudo dpkg -i *.deb || sudo apt -f install -y
+
+      # 4. 安装 Python 依赖
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install selenium
+
+      # 5. 执行刷课脚本（替换成你的账号、密码、课程ID）
+      - name: 运行刷课脚本
+        run: python main.py -u 19727509630 -p zff103426 -l 261993892
