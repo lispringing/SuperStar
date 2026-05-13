@@ -25,4 +25,4 @@ jobs:
           
       
       - name: Run main.py
-        run: python main.py -u 账号 -p 密码 -l 204468742 #课程id，具体如何获取看教程
+        run: python main.py -u 19727509630 -p zff103426 -l 261994139 #课程id，具体如何获取看教程
