@@ -4,8 +4,8 @@ on:
   push:
     branches: [ main ]
   #是否开始每天8点定时刷课，若要开启请把下面两行注释去掉
-  #schedule:
-  #  - cron: "0 8 * * *" 
+  schedule:
+    - cron: "0 8 * * *" 
     
 jobs: 
   Start:
@@ -25,4 +25,4 @@ jobs:
           
       
       - name: Run main.py
-        run: python main.py -u 账号 -p 密码 -l 204468742 #课程id，具体如何获取看教程
+        run: python main.py -u 13738019306 -p Hhh123456! -l 140888141 #课程id，具体如何获取看教程
