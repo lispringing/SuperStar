@@ -1,13 +1,16 @@
 name: 刷课
  
-on: 
-  push:
-    branches: [ main ]
+on:
+  workflow_dispatch:
   #是否开始每天8点定时刷课，若要开启请把下面两行注释去掉
   #schedule:
-  #  - cron: "0 8 * * *" 
-    
-jobs: 
+  #  - cron: "0 8 * * *"
+
+# 工作流只需要读取仓库内容；不要授予写入或部署权限。
+permissions:
+  contents: read
+
+jobs:
   Start:
     runs-on: ubuntu-latest # 在最新版本的 Ubuntu 操作系统环境下运行
     steps: # 要执行的步骤
@@ -21,9 +24,18 @@ jobs:
  
       - name: 安装依赖包
         run: | # 安装依赖包
-          pip install -r ./requirements.txt 
-          
-      
+          pip install -r ./requirements.txt
+
+      - name: 检查必填 Secrets
+        env:
+          CHAOXING_USERNAME: ${{ secrets.CHAOXING_USERNAME }}
+          CHAOXING_PASSWORD: ${{ secrets.CHAOXING_PASSWORD }}
+          CHAOXING_COURSE_LIST: ${{ secrets.CHAOXING_COURSE_LIST }}
+        run: |
+          test -n "$CHAOXING_USERNAME" || (echo "缺少 CHAOXING_USERNAME Secret" >&2; exit 1)
+          test -n "$CHAOXING_PASSWORD" || (echo "缺少 CHAOXING_PASSWORD Secret" >&2; exit 1)
+          test -n "$CHAOXING_COURSE_LIST" || (echo "缺少 CHAOXING_COURSE_LIST Secret" >&2; exit 1)
+
       - name: Run main.py
         env:
           CHAOXING_USERNAME: ${{ secrets.CHAOXING_USERNAME }}

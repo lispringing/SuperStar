@@ -14,10 +14,21 @@
 
 ![截图](/images/star.png)
 
-## 用前必读必读！
-默认fork仓库之后是公开的状态，也就是说你的账号和密码是处于一个明文状态！！很危险！！建议把仓库权限改为私有
+## 安全配置（必读）
 
-之前本仓库就因为明文账号密码泄露导致一些同学账号被盗拿来恶作剧(不得不说世界上还是坏人多)，故提前在此说明，希望大家周知
+不要将账号、密码或 Cookie 写入仓库文件、代码提交、Issue、日志或截图。Fork 仓库通常仍属于原 Fork 网络，不能直接改为私有；如需独立私有仓库，须先在 GitHub 的仓库设置中选择 **Leave fork network**。私有仓库的 Actions 可能受账户分钟配额限制。
+
+推荐将凭据存放在 GitHub Actions Secrets：进入 Fork 后仓库的 **Settings → Secrets and variables → Actions → New repository secret**，创建下列三个 Secret。Secret 的值不会显示在 Actions 日志中；请勿在日志中打印它们。
+
+| Secret 名称 | 必填 | 值的格式与示例 |
+| --- | --- | --- |
+| `CHAOXING_USERNAME` | 是 | 账号字符串，例如 `your_name` |
+| `CHAOXING_PASSWORD` | 是 | 密码字符串，例如 `your_password` |
+| `CHAOXING_COURSE_LIST` | 是 | 课程 ID 的逗号分隔字符串，例如 `114514,1919810`（不要填写方括号或引号） |
+
+工作流只支持手动触发：在 **Actions → 刷课 → Run workflow** 中运行。这样提交 README 或配置等普通改动不会意外执行工作流。
+
+若在本地使用配置文件，请从 `config_template.ini` 复制出 `config.ini`，仅保存在本机。`config.ini` 和 `cookies.txt` 已被 `.gitignore` 排除，但提交前仍请检查 `git status`，避免凭据进入版本库。
 
 ## 快速开始
 
