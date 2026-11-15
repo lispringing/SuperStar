@@ -38,7 +38,7 @@ fork 后的仓库由于 GitHub 内部限制，是无法直接修改为 Private �
 
 1. 进入项目页面后，点击 fork，复制本项目（可以的话顺便点一个旁边的 Star！）；
 
-![项目主页面](https://blog.springing.top/img/674a726865c9f.png)
+<img width="1182" height="196" alt="image" src="https://github.com/user-attachments/assets/f567612d-93b8-4ca9-92ce-1ef443d151b1" />
 
 2. 点击项目上方的 Actions 按钮（手机端的被折叠起来了），开启 Actions 功能；
 
@@ -46,7 +46,7 @@ fork 后的仓库由于 GitHub 内部限制，是无法直接修改为 Private �
 
 3. 回到（1）中的项目主页，在出现的文件夹目录中，点击 `.github/workflows`，进入这个文件夹；
 
-![workflows](https://blog.springing.top/img/674a73c958ea2.png)
+<img width="1242" height="667" alt="image" src="https://github.com/user-attachments/assets/5509318b-83a7-41d2-ad49-e8a0f4cca394" />
 
 进入该文件夹，会发现里面有一个名为 `main.yml` 的文件，点击它，再点击右上方的编辑按钮，进入文件编辑界面；
 
@@ -73,9 +73,9 @@ fork 后的仓库由于 GitHub 内部限制，是无法直接修改为 Private �
 
 替换账号密码或课程 id 时，**需要将该行中自带的双引号一并除去**。
 
-4. 修改完成后提交文件。
+4. 修改完成后，点击“Commit Changes”提交文件。
 
-![提交文件](https://blog.springing.top/img/674a77aa6fdba.png)
+<img width="1368" height="1204" alt="image" src="https://github.com/user-attachments/assets/be4ffa47-c004-4754-9763-c04c2be20c83" />
 
 因为你修改了文件（提交这个 workflow）后，会因文件的 push 而自动触发一次 Action 的执行。
 
