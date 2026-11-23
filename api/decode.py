@@ -444,9 +444,13 @@ def _process_question(div_tag, font_decoder=None) -> Dict[str, Any]:
     # 解析题目和选项
     q_title = _extract_title(title_div, font_decoder)
     q_options = []
-    for li in options_list:
-        q_options.append(_extract_choices(li, font_decoder))
-    # 排序选项
+    for idx, li in enumerate(options_list):
+        _text = _extract_choices(li, font_decoder)
+        # 选项没有 A/B/C/D 前缀时按 DOM 顺序补上，保证字母与页面显示一致
+        if not re.match(r'^[A-Za-z]\s*[.、:：)?）]', _text):
+            _text = f"{chr(65 + idx)}. {_text}"
+        q_options.append(_text)
+    # 排序选项（此时都已带字母前缀，排序不会打乱顺序）
     q_options.sort()
     q_options = '\n'.join(q_options)
     
@@ -503,12 +507,22 @@ def _extract_title(element, font_decoder=None) -> str:
     return cleaned_content
 
 def _extract_choices(element, font_decoder=None) -> str:
-    """提取选项内容，支持解码加密字体"""
+    """提取选项内容，支持解码加密字体；同时保留选项里的图片"""
     if not element:
         return ""
-        
-    # 提取aria-label属性值作为选项，解决#474
-    choice = element.get("aria-label") or element.get_text()
+
+    # 收集文本和图片：纯图片选项如果只取文本会变成空字符串
+    parts = []
+    for item in element.descendants:
+        if isinstance(item, NavigableString):
+            parts.append(str(item))
+        elif item.name == "img":
+            parts.append(f'<img src="{item.get("src", "")}">')
+
+    choice = "".join(parts).strip()
+    if not choice:
+        # 兜底：部分页面把内容放在 aria-label 上（解决#474）
+        choice = (element.get("aria-label") or "").strip()
     if not choice:
         return ""
 

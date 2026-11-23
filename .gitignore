@@ -154,3 +154,11 @@ config*.ini
 .idea/
 .vscode/
 cache.json
+
+# 本地运行产物（含个人数据，禁止提交）
+未通过测验记录.md
+.homework_enc.json
+requirements.local.txt
+作业列表.txt
+.venv/
+libs/

@@ -1,3 +1,4 @@
+import base64
 import configparser
 import json
 import os
@@ -137,6 +138,7 @@ class CacheDAO:
 # TODO: 重构此部分代码，将此类改为抽象类，加载题库方法改为静态方法，禁止直接初始化此类
 class Tiku:
     CONFIG_PATH = os.path.join(os.getcwd(), "config.ini")  # TODO: 从运行参数中获取config路径
+    USE_CACHE = True    # False 时既不读缓存也不写缓存
     DISABLE = False     # 停用标志
     SUBMIT = False      # 提交标志
     COVER_RATE = 0.8    # 覆盖率
@@ -177,6 +179,9 @@ class Tiku:
         if not self._conf:
             self.config_set(self._get_conf())
         if not self.DISABLE:
+            # 是否使用本地答题缓存（config.ini 的 [tiku] use_cache=false 可关闭）
+            _uc = str(self._conf.get('use_cache', 'true')).strip().lower()
+            self.USE_CACHE = _uc not in ('false', '0', 'no', 'off')
             # 设置提交模式
             self.SUBMIT = True if self._conf['submit'] == 'true' else False
             self.COVER_RATE = float(self._conf['cover_rate'])
@@ -215,9 +220,11 @@ class Tiku:
         q_info['title'] = sub(r'（\d+\.\d+分）$', '', q_info['title'])
         logger.debug(f"处理后标题：{q_info['title']}")
 
-        # 先过缓存
-        cache_dao = CacheDAO()
-        answer = cache_dao.get_cache(q_info['title'])
+        # 先过缓存（键必须包含选项：同一门课里"下列说法正确的是"这类题干可能重复多次）
+        use_cache = getattr(self, "USE_CACHE", True)
+        cache_dao = CacheDAO() if use_cache else None
+        cache_key = f"{q_info['title']}||{q_info.get('options', '')}||{q_info.get('type', '')}"
+        answer = cache_dao.get_cache(cache_key) if use_cache else None
         if answer:
             logger.info(f"从缓存中获取答案：{q_info['title']} -> {answer}")
             return answer.strip()
@@ -227,7 +234,10 @@ class Tiku:
                 answer = answer.strip()
                 logger.info(f"从{self.name}获取答案：{q_info['title']} -> {answer}")
                 if check_answer(answer, q_info['type'], self):
-                    cache_dao.add_cache(q_info['title'], answer)
+                    if use_cache:
+                        cache_dao.add_cache(cache_key, answer)
+                    else:
+                        logger.info("已启用 --no-cache，本次结果不写入缓存")
                     return answer
                 else:
                     logger.info(f"从{self.name}获取到的答案类型与题目类型不符，已舍弃")
@@ -975,7 +985,9 @@ class TikuAdapter(Tiku):
         self.api = self._conf['url']
 
 class AI(Tiku):
-    # AI大模型答题实现
+    # AI大模型答题实现（支持图文混合题目）
+    IMG_RE = re.compile(r'<img[^>]*?src="([^"]+)"[^>]*>')
+
     def __init__(self) -> None:
         super().__init__()
         self.name = 'AI大模型答题'
@@ -989,7 +1001,6 @@ class AI(Tiku):
 
     def _completion_kwargs(self, **kwargs):
         if self._is_deepseek_v4():
-            # DeepSeek V4 defaults to thinking mode, which can leave message.content empty.
             kwargs['extra_body'] = {'thinking': {'type': 'disabled'}}
         return kwargs
 
@@ -1001,103 +1012,177 @@ class AI(Tiku):
                 logger.debug(f"API请求间隔过短, 等待 {sleep_time} 秒")
                 time.sleep(sleep_time)
 
+    @staticmethod
+    def _sniff_image_mime(raw: bytes) -> Optional[str]:
+        """按文件头判断图片格式；不是图片就返回 None"""
+        if raw[:4] == b'\x89PNG':
+            return "image/png"
+        if raw[:3] == b'\xff\xd8\xff':
+            return "image/jpeg"
+        if raw[:6] in (b'GIF87a', b'GIF89a'):
+            return "image/gif"
+        if raw[:4] == b'RIFF' and raw[8:12] == b'WEBP':
+            return "image/webp"
+        if raw[:2] == b'BM':
+            return "image/bmp"
+        return None
+
+    def _image_to_data_uri(self, url: str) -> Optional[str]:
+        """下载题目图片并转成 base64 data URI，失败返回 None"""
+        try:
+            resp = requests.get(
+                url,
+                timeout=15,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                                  "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Referer": "https://mooc1.chaoxing.com/",
+                },
+            )
+            if resp.status_code != 200 or not resp.content:
+                logger.debug(f"图片下载失败({resp.status_code}): {url}")
+                return None
+            if len(resp.content) > 4 * 1024 * 1024:
+                logger.debug(f"图片过大已跳过: {url}")
+                return None
+            raw = resp.content
+            mime = self._sniff_image_mime(raw)
+            if not mime:
+                # 常见于 UA 不全时返回的 403 HTML，绝对不能当图片发出去
+                logger.warning(f"下载到的不是图片（可能是 403 页面）: {url}")
+                return None
+            return f"data:{mime};base64,{base64.b64encode(raw).decode()}"
+        except Exception as e:
+            logger.debug(f"图片下载异常: {url} {e}")
+            return None
+
+    def _build_user_content(self, text: str):
+        """把文本里的 <img> 换成 [图N] 并附图；纯文本则原样返回"""
+        parts = []
+        last = 0
+        index = 0
+        for match in self.IMG_RE.finditer(text):
+            parts.append({"type": "text", "text": text[last:match.start()]})
+            index += 1
+            parts.append({"type": "text", "text": f"[图{index}]"})
+            data_uri = self._image_to_data_uri(match.group(1))
+            if data_uri:
+                parts.append({"type": "image_url", "image_url": {"url": data_uri}})
+            else:
+                parts.append({"type": "text", "text": "（该图加载失败）"})
+            last = match.end()
+        parts.append({"type": "text", "text": text[last:]})
+        if index == 0:
+            return text
+        logger.info(f"本题包含 {index} 张图片，已转为多模态请求")
+        return parts
+
+    @staticmethod
+    def _extract_json_answer(text: str):
+        """从模型输出里提取包含 Answer 的 JSON（允许前后有分析文字或代码块）"""
+        if not text:
+            return None
+        cleaned = str(text).strip()
+        candidates = []
+        for m in re.finditer(r'```(?:json)?\s*(.*?)\s*```', cleaned, re.S):
+            candidates.append(m.group(1))
+        candidates.append(cleaned)
+        for c in candidates:
+            try:
+                obj = json.loads(c)
+                if isinstance(obj, dict) and ('Answer' in obj or 'answer' in obj):
+                    return obj
+            except Exception:
+                pass
+        for m in reversed(list(re.finditer(r'\{[^{}]*"[Aa]nswer"\s*:[^{}]*\}', cleaned, re.S))):
+            try:
+                obj = json.loads(m.group(0))
+                if isinstance(obj, dict) and ('Answer' in obj or 'answer' in obj):
+                    return obj
+            except Exception:
+                continue
+        return None
+
     def _query(self, q_info: dict):
         def remove_md_json_wrapper(md_str):
-            # 使用正则表达式匹配Markdown代码块并提取内容
             pattern = r'^\s*```(?:json)?\s*(.*?)\s*```\s*$'
             match = re.search(pattern, md_str, re.DOTALL)
             return match.group(1).strip() if match else md_str.strip()
 
         if self.http_proxy:
-            proxy = self.http_proxy
-            httpx_client = httpx.Client(proxy=proxy)
-            client = OpenAI(http_client=httpx_client, base_url = self.endpoint,api_key = self.key)
+            httpx_client = httpx.Client(proxy=self.http_proxy)
+            client = OpenAI(http_client=httpx_client, base_url=self.endpoint, api_key=self.key)
         else:
-            client = OpenAI(base_url = self.endpoint,api_key = self.key)
-        # 去除选项字母，防止大模型直接输出字母而非内容
-        options_list = q_info['options'].split('\n')
-        cleaned_options = [re.sub(r"^[A-Z]\s*", "", option) for option in options_list]
-        options = "\n".join(cleaned_options)
-        # 判断题目类型
+            client = OpenAI(base_url=self.endpoint, api_key=self.key)
+
+        # 保留选项字母，让模型可以直接回答 A/B/C/D
+        options = "\n".join(q_info['options'].split('\n'))
+
+        if q_info['type'] == "single":
+            system_prompt = (
+                "本题为单选题，选项带有 A/B/C/D 编号，其中部分选项可能是图片（消息中用 [图N] 标记）。"
+                "请先逐一转写/描述每个选项的内容，再逐条判断正误，最后另起一行输出 JSON。"
+                "最终答案必须形如 {\"Answer\": [\"B\"]}，只包含选项字母。"
+            )
+            user_text = f"题目：{q_info['title']}\n选项：\n{options}"
+        elif q_info['type'] == "multiple":
+            system_prompt = (
+                "本题为多选题，选项带有 A/B/C/D 编号，其中部分选项可能是图片（消息中用 [图N] 标记）。"
+                "请先逐一转写/描述每个选项的内容，再逐条判断正误（特别注意公式是否有笔误），"
+                "最后另起一行输出 JSON。最终答案必须形如 {\"Answer\": [\"A\",\"C\"]}，只包含选项字母。"
+            )
+            user_text = f"题目：{q_info['title']}\n选项：\n{options}"
+        elif q_info['type'] == 'completion':
+            system_prompt = (
+                "本题为填空题，你必须根据语境和相关知识填入合适的内容，以json格式输出正确的答案，"
+                "示例回答：{\"Answer\": [\"答案\"]}。不要使用MD语法。"
+            )
+            user_text = f"题目：{q_info['title']}"
+        elif q_info['type'] == 'judgement':
+            system_prompt = (
+                "本题为判断题，你只能回答正确或者错误，以json格式输出，"
+                "示例回答：{\"Answer\": [\"正确\"]}。不要使用MD语法。"
+            )
+            user_text = f"题目：{q_info['title']}"
+        else:
+            system_prompt = (
+                "本题为简答题，请根据题目回答问题，以json格式输出，"
+                "示例回答：{\"Answer\": [\"这是我的答案\"]}。不要使用MD语法。"
+            )
+            user_text = f"题目：{q_info['title']}"
+
+        user_content = self._build_user_content(user_text)
+
         self._wait_for_interval()
         self.last_request_time = time.time()
-        if q_info['type'] == "single":
-            completion = client.chat.completions.create(**self._completion_kwargs(
-                model = self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "本题为单选题，你只能选择一个选项，请根据题目和选项回答问题，以json格式输出正确的选项内容，示例回答：{\"Answer\": [\"答案\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-                    },
-                    {
-                        "role": "user",
-                        "content": f"题目：{q_info['title']}\n选项：{options}"
-                    }
-                ]
-            ))
-        elif q_info['type'] == 'multiple':
-            completion = client.chat.completions.create(**self._completion_kwargs(
-                model = self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "本题为多选题，你必须选择两个或以上选项，请根据题目和选项回答问题，以json格式输出正确的选项内容，示例回答：{\"Answer\": [\"答案1\",\n\"答案2\",\n\"答案3\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-                    },
-                    {
-                        "role": "user",
-                        "content": f"题目：{q_info['title']}\n选项：{options}"
-                    }
-                ]
-            ))
-        elif q_info['type'] == 'completion':
-            completion = client.chat.completions.create(**self._completion_kwargs(
-                model = self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "本题为填空题，你必须根据语境和相关知识填入合适的内容，请根据题目回答问题，以json格式输出正确的答案，示例回答：{\"Answer\": [\"答案\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-                    },
-                    {
-                        "role": "user",
-                        "content": f"题目：{q_info['title']}"
-                    }
-                ]
-            ))
-        elif q_info['type'] == 'judgement':
-            completion = client.chat.completions.create(**self._completion_kwargs(
-                model = self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "本题为判断题，你只能回答正确或者错误，请根据题目回答问题，以json格式输出正确的答案，示例回答：{\"Answer\": [\"正确\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-                    },
-                    {
-                        "role": "user",
-                        "content": f"题目：{q_info['title']}"
-                    }
-                ]
-            ))
-        else:
-            completion = client.chat.completions.create(**self._completion_kwargs(
-                model = self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "本题为简答题，你必须根据语境和相关知识填入合适的内容，请根据题目回答问题，以json格式输出正确的答案，示例回答：{\"Answer\": [\"这是我的答案\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-                    },
-                    {
-                        "role": "user",
-                        "content": f"题目：{q_info['title']}"
-                    }
-                ]
-            ))
-
         try:
-            response = json.loads(remove_md_json_wrapper(completion.choices[0].message.content))
-            sep = "\n"
-            return sep.join(response['Answer']).strip()
-        except:
-            logger.error("无法解析大模型输出内容")
+            completion = client.chat.completions.create(**self._completion_kwargs(
+                model=self.model,
+                temperature=0,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_content},
+                ],
+            ))
+        except Exception as e:
+            logger.error(f"大模型请求失败: {e}")
+            return None
+
+        raw_content = completion.choices[0].message.content
+        try:
+            response = self._extract_json_answer(raw_content)
+            if response is None:
+                raise ValueError("no json answer found")
+            answers = response.get('Answer') or response.get('answer') or []
+            if not isinstance(answers, list) or not answers:
+                logger.warning(f"模型返回空答案，原始输出: {str(raw_content)[:200]}")
+                return None
+            # 选项字母答案统一成大写、去重、排序（多选 AC 不能是换行分隔）
+            if all(isinstance(a, str) and re.fullmatch(r"[A-Ha-h]", a.strip()) for a in answers):
+                return "".join(sorted({a.strip().upper() for a in answers}))
+            return "\n".join(str(a) for a in answers).strip()
+        except Exception:
+            logger.error(f"无法解析大模型输出内容，原始输出: {str(raw_content)[:200]}")
             return None
 
     def _init_tiku(self):
@@ -1108,10 +1193,7 @@ class AI(Tiku):
         self.min_interval_seconds = int(self._conf['min_interval_seconds'])
 
     def check_llm_connection(self) -> bool:
-        """
-        检查大模型连接是否可用
-        发送一个简单的测试请求来验证 API 配置
-        """
+        """检查大模型连接是否可用"""
         logger.info(f'正在检查 {self.name} 连接...')
         try:
             if self.http_proxy:
@@ -1120,27 +1202,18 @@ class AI(Tiku):
             else:
                 client = OpenAI(base_url=self.endpoint, api_key=self.key)
 
-            # 发送一个简单的测试请求
             self._wait_for_interval()
             self.last_request_time = time.time()
             completion = client.chat.completions.create(**self._completion_kwargs(
                 model=self.model,
-                messages=[
-                    {
-                        'role': 'user',
-                        'content': '你好，请回答：1+1 等于几？只回答数字。'
-                    }
-                ],
-                max_tokens=64
+                messages=[{'role': 'user', 'content': '你好，请回答：1+1 等于几？只回答数字。'}],
+                max_tokens=64,
             ))
-            
             if completion.choices and completion.choices[0].message.content:
                 logger.info(f'{self.name} 连接检查成功')
                 return True
-            else:
-                logger.error(f'{self.name} 连接检查失败：未收到响应')
-                return False
-                
+            logger.error(f'{self.name} 连接检查失败：未收到响应')
+            return False
         except Exception as e:
             logger.error(f'{self.name} 连接检查失败：{e}')
             return False

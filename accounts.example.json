@@ -1,0 +1,32 @@
+[
+  {
+    "name": "alice-c1",
+    "username": "18000000000",
+    "password": "你的密码",
+    "courses": ["268741619"],
+    "mode": "chapters",
+    "speed": 2,
+    "jobs": 1,
+    "start_delay": 0
+  },
+  {
+    "name": "alice-c2",
+    "username": "18000000000",
+    "password": "你的密码",
+    "courses": ["268741620"],
+    "mode": "chapters",
+    "speed": 2,
+    "jobs": 1,
+    "start_delay": 15
+  },
+  {
+    "name": "bob",
+    "username": "13900000000",
+    "password": "另一个密码",
+    "courses": ["111111111"],
+    "mode": "both",
+    "no_cache": true,
+    "homework_submit": true,
+    "homework_seed": "可选：没有 enc 时填一条作业链接"
+  }
+]

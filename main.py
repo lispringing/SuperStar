@@ -86,6 +86,18 @@ def parse_args():
 
     parser.add_argument("--auto-sign", action="store_true", help="自动签到")
 
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="关闭答题缓存：每一题都重新问题库/模型，且结果不写入 cache.json",
+    )
+
+    parser.add_argument(
+        "--redo-finished",
+        action="store_true",
+        help="强制重新处理平台标记为已完成的章节（用于补救保存但未提交的测验）",
+    )
+
     # 在解析之前捕获 -h 的行为
     if len(sys.argv) == 2 and sys.argv[1] in {"-h", "--help"}:
         parser.print_help()
@@ -125,6 +137,10 @@ def load_config_from_file(config_path):
             common_config["password"] = common_config["password"].strip()
         if "verbose" in common_config:
             common_config["verbose"] = str_to_bool(common_config["verbose"])
+        if "redo_finished" in common_config:
+            common_config["redo_finished"] = str_to_bool(common_config["redo_finished"])
+        if "no_cache" in common_config:
+            common_config["no_cache"] = str_to_bool(common_config["no_cache"])
 
     # 检查并读取tiku节
     if config.has_section("tiku"):
@@ -152,6 +168,8 @@ def build_config_from_args(args):
         "jobs": args.jobs,
         "notopen_action": args.notopen_action if args.notopen_action else "retry",
         "verbose": args.verbose,
+        "redo_finished": args.redo_finished,
+        "no_cache": args.no_cache,
     }
     return common_config, {}, {}
 
@@ -188,6 +206,9 @@ def init_chaoxing(common_config, tiku_config):
     tiku.config_set(tiku_config)  # 载入配置
     tiku = tiku.get_tiku_from_config()  # 载入题库
     tiku.init_tiku()  # 初始化题库
+    if common_config.get("no_cache"):
+        tiku.USE_CACHE = False
+        logger.warning("已关闭答题缓存（--no-cache）：每题都会重新查询，结果不写入 cache.json")
     
     # 获取查询延迟设置
     
@@ -211,6 +232,10 @@ def init_chaoxing(common_config, tiku_config):
     
     # 实例化超星API
     chaoxing = Chaoxing(account=account, tiku=tiku, query_delay=query_delay)
+    # 强制重做已完成章节（补救“已保存未提交”的测验）
+    chaoxing.force_redo = bool(common_config.get("redo_finished", False))
+    if chaoxing.force_redo:
+        logger.warning("已开启 --redo-finished：平台标记为已完成的章节也会重新处理")
     
     return chaoxing
 
@@ -408,7 +433,7 @@ class JobProcessor:
 def process_chapter(chaoxing: Chaoxing, course:dict[str, Any], point:dict[str, Any], speed:float) -> ChapterResult:
     """处理单个章节"""
     logger.info(f'当前章节: {point["title"]}')
-    if point["has_finished"]:
+    if point["has_finished"] and not getattr(chaoxing, "force_redo", False):
         logger.info(f'章节：{point["title"]} 已完成所有任务点')
         return ChapterResult.SUCCESS
     
@@ -422,6 +447,15 @@ def process_chapter(chaoxing: Chaoxing, course:dict[str, Any], point:dict[str, A
     # 发现未开放章节, 根据配置处理
     if job_info.get("notOpen", False):
         return ChapterResult.NOT_OPEN
+
+    # 强制重做模式：已完成的章节只处理测验（workid），不重看视频/文档
+    if getattr(chaoxing, "force_redo", False) and point["has_finished"]:
+        work_jobs = [j for j in jobs if j.get("type") == "workid"]
+        if not work_jobs:
+            logger.info(f'章节：{point["title"]} 没有测验任务，跳过')
+            return ChapterResult.SUCCESS
+        logger.info(f'章节：{point["title"]} 发现 {len(work_jobs)} 个测验任务，开始重做')
+        jobs = work_jobs
 
     # 已经默认处理空任务，此处不需要判断
     if not jobs:
