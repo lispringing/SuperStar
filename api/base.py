@@ -574,8 +574,11 @@ class Chaoxing:
         last_log_time = 0
         last_iter = time.time()
         wait_time = int(random.uniform(30, 90))
+        if _speed > 1:
+            # 2 倍速下如果一次跳 60~180 秒，服务端可能判定异常不认进度
+            wait_time = min(wait_time, 30)
 
-        logger.info(f"开始任务: {_job['name']}, 总时长: {duration}s, 已进行: {play_time}s")
+        logger.info(f"开始任务: {_job['name']}, 总时长: {duration}s, 已进行: {play_time}s, 倍速: {_speed}x")
 
         pbar = tqdm(total=duration, initial=play_time, desc=_job["name"],
                     unit_scale=True, bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}')
@@ -667,6 +670,60 @@ class Chaoxing:
             return StudyResult.ERROR
         else:
             return StudyResult.SUCCESS
+
+    def _record_failed_work(self, course_title, work_title, work_key, questions_list, path="未通过测验记录.md"):
+        """把提交后仍未及格的测验记录到文件，供用户手工处理"""
+        try:
+            import os
+            from datetime import datetime
+            marker = f"<!-- work:{work_key} -->"
+            existing = ""
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf8") as fp:
+                    existing = fp.read()
+            if marker in existing:
+                logger.info(f"未通过测验已在记录文件中：{work_title}")
+                return
+            is_new = not existing
+            lines = []
+            if is_new:
+                lines.append("# 未通过测验记录")
+                lines.append("")
+                lines.append("> 这些测验提交后仍未达到及格线（stuStatus=5），平台侧没有重做入口。")
+                lines.append("> 请对照题目手动核对，或联系老师重置该测验。")
+                lines.append("")
+            lines.append(f"## {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | {course_title} | {work_title}")
+            lines.append("")
+            lines.append(f"- 状态：提交成功，但未达到及格线（stuStatus=5）")
+            lines.append(f"- 题目数量：{len(questions_list)}")
+            lines.append("")
+            for i, q in enumerate(questions_list, 1):
+                _type_map = {"single": "单选题", "multiple": "多选题", "judgement": "判断题",
+                             "completion": "填空题", "shortanswer": "简答题"}
+                _qtype = _type_map.get(str(q.get('type', '')), str(q.get('type', '')))
+                _title = re.sub(r'^【[^】]*】\s*', '', str(q.get('title', '')).strip())
+                lines.append(f"### {i}. [{_qtype}] {_title}")
+                lines.append("")
+                for opt in str(q.get('options') or '').split('\n'):
+                    _opt = opt.strip()
+                    if not _opt:
+                        continue
+                    _opt = re.sub(r'<img[^>]*?src="([^"]+)"[^>]*>', r'![图](\1)', _opt)
+                    _opt = re.sub(r'^([A-Da-d])\.\s*\1\s*', r'\1. ', _opt)
+                    lines.append(f"- {_opt}")
+                ans = q.get('answerField', {}).get(f"answer{q.get('id', '')}", '')
+                lines.append("")
+                lines.append(f"**本次提交的答案：{ans if ans else '（空）'}**")
+                lines.append("")
+            lines.append(marker)
+            lines.append("")
+            with open(path, "a" if not is_new else "w", encoding="utf8") as fp:
+                if not is_new:
+                    fp.write("\n")
+                fp.write("\n".join(lines) + "\n")
+            logger.warning(f"已把未通过的测验记录到 {path}：{work_title}")
+        except Exception as e:
+            logger.error(f"写入未通过测验记录失败: {e}")
 
     def study_work(self, _course, _job, _job_info) -> StudyResult:
         # FIXME: 这一块可以单独搞一个类出来了，方法里面又套方法，每一次调用都会创建新的方法，十分浪费
@@ -787,7 +844,7 @@ class Chaoxing:
                 res = [res]
             for c in res:
                 # 仅在字符串长度大于1时才尝试去除开头的字母编号，防止误删单个字母答案
-                cleaned = re.sub(r'^[A-Za-z]\s*[.、:：)?）]?\s*|[.,!?;:，。！？；：]', '', c) if len(c) > 1 else c
+                cleaned = re.sub(r'^[A-Za-z]\s*[.、:：)?）]\s*|[.,!?;:，。！？；：]', '', c) if len(c) > 1 else c
                 cleaned_res.append(cleaned.strip())
 
             return cleaned_res
@@ -875,7 +932,11 @@ class Chaoxing:
 
         _url = "https://mooc1.chaoxing.com/mooc-ans/api/work"
 
-        @with_retry(max_retries=3, delay=1)
+        # 强制重做模式下，已提交的测验本来就取不到题目，不必反复重试
+        _retry_times = 1 if getattr(self, "force_redo", False) else 3
+        _retry_delay = 0 if getattr(self, "force_redo", False) else 1
+
+        @with_retry(max_retries=_retry_times, delay=_retry_delay)
         def fetch_response():
             return _session.get(
                 _url,
@@ -904,10 +965,25 @@ class Chaoxing:
         try:
             final_resp, questions = fetch_response()
         except Exception as e:
+            # 强制重做模式下，取不到题目通常说明该测验已提交/已完成，直接跳过
+            if getattr(self, "force_redo", False):
+                logger.warning(f"该测验已提交或无法再次作答，跳过: {e}")
+                return StudyResult.SUCCESS
             logger.error(f"请求失败: {e}")
             return StudyResult.ERROR
 
         _ORIGIN_HTML_CONTENT = final_resp.text  # 用于配合输出网页源码, 帮助修复#391错误
+        _question_list = questions.get("questions", [])
+        _work_title = ""
+        try:
+            import html as _html
+            for _cand in re.findall(r"<h3[^>]*>(.*?)</h3>", final_resp.text, re.S):
+                _txt = _html.unescape(re.sub(r"<[^>]+>", "", _cand)).strip()
+                if _txt:
+                    _work_title = _txt
+                    break
+        except Exception:
+            pass
 
         # 搜题
         total_questions = len(questions["questions"])
@@ -925,7 +1001,11 @@ class Chaoxing:
                 q[f'answerSource{q["id"]}'] = "random"
             else:
                 # 根据响应结果选择答案
-                if q["type"] == "multiple":
+                # 新增：题库/模型直接返回选项字母（如 B / AC）时优先采用
+                _letters = res.strip() if isinstance(res, str) else ""
+                if q["type"] in ("single", "multiple") and re.fullmatch(r"[A-Ha-h]{1,8}", _letters):
+                    answer = _letters.upper()
+                elif q["type"] == "multiple":
                     # 多选处理
                     options_list = multi_cut(q["options"])
                     res_list = multi_cut(res)
@@ -1034,6 +1114,14 @@ class Chaoxing:
             res_json = res.json()
             if res_json["status"]:
                 logger.info(f'{"提交" if questions["pyFlag"] == "" else "保存"}答题成功 -> {res_json["msg"]}')
+                if questions["pyFlag"] == "" and res_json.get("stuStatus") == 5:
+                    logger.warning("本次提交未达到及格线（stuStatus=5），任务点不会恢复，需要重做该测验")
+                    self._record_failed_work(
+                        str(_course.get("title", "")),
+                        _work_title or str(_job.get("jobid", "")),
+                        f'{_course.get("courseId")}-{_job.get("jobid")}',
+                        _question_list,
+                    )
             else:
                 logger.error(f'{"提交" if questions["pyFlag"] == "" else "保存"}答题失败 -> {res_json["msg"]}')
                 return StudyResult.ERROR
